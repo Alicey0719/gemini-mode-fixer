@@ -28,7 +28,7 @@ const TIMING = {
   DROPDOWN_TIMEOUT: 10,    // ドロップダウン展開タイムアウト
   CLICK_REFLECT: 10,        // クリック後の反映待機
   RETRY_BACKOFF_MAX: 400,  // リトライの最大待機時間
-  PAGE_INIT: 60,           // ページ読み込み後の初期化待機
+  PAGE_INIT: 500,           // ページ読み込み後の初期化待機
   DIRECT_CHECK: 30,         // 直接切り替え後の確認待機
   MENU_CLOSE: 30,           // メニューを閉じる際の待機
 };
@@ -169,11 +169,6 @@ function waitForDomChange(timeoutMs = TIMING.DROPDOWN_TIMEOUT) {
   });
 }
 
-/** ログ出力（無効化） */
-function log(msg, level = 'log') {
-  // ログを出力しない
-}
-
 // ─── Shadow DOM 対応 深部探索 ─────────────────────────────────────────────────
 
 /**
@@ -212,201 +207,6 @@ function deepGetAllTextElements(root) {
   }
   walk(root);
   return found;
-}
-
-// ─── 診断ユーティリティ ───────────────────────────────────────────────────────
-
-/**
- * fetch と XMLHttpRequest をインターセプトしてモード関連のAPIリクエストを監視。
- */
-let networkLogs = [];
-function setupNetworkInterception() {
-  const originalFetch = window.fetch;
-  window.fetch = async function(...args) {
-    const url = args[0]?.toString() || '';
-    const options = args[1] || {};
-    
-    if (url.includes('model') || url.includes('mode') || url.includes('preference') || url.includes('setting')) {
-      networkLogs.push({
-        type: 'fetch',
-        url: url,
-        method: options.method || 'GET',
-        body: options.body ? options.body.toString().slice(0, 500) : null,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    return originalFetch.apply(this, args);
-  };
-  
-  const originalOpen = XMLHttpRequest.prototype.open;
-  const originalSend = XMLHttpRequest.prototype.send;
-  
-  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-    this._interceptedUrl = url;
-    this._interceptedMethod = method;
-    return originalOpen.apply(this, [method, url, ...rest]);
-  };
-  
-  XMLHttpRequest.prototype.send = function(body) {
-    const url = this._interceptedUrl?.toString() || '';
-    if (url.includes('model') || url.includes('mode') || url.includes('preference') || url.includes('setting')) {
-      networkLogs.push({
-        type: 'xhr',
-        url: url,
-        method: this._interceptedMethod || 'GET',
-        body: body ? body.toString().slice(0, 500) : null,
-        timestamp: new Date().toISOString()
-      });
-    }
-    return originalSend.apply(this, arguments);
-  };
-}
-
-/**
- * 記録されたネットワークログを表示。
- */
-function dumpNetworkLogs() {
-  log('=== ネットワークログ ===');
-  if (networkLogs.length === 0) {
-    log('記録されたリクエストはありません。');
-  } else {
-    networkLogs.forEach((entry, idx) => {
-      log(`[${idx}] ${entry.method} ${entry.url}`);
-      if (entry.body) log(`    Body: ${entry.body}`);
-    });
-  }
-  log('=== ログ終了 ===');
-}
-
-/**
- * ストレージ（LocalStorage、SessionStorage、Cookie）を調査してモード関連の設定を探す。
- */
-function diagnosticStorageDump() {
-  log('=== ストレージ診断 開始 ===');
-  
-  // LocalStorage
-  log('--- LocalStorage ---');
-  const lsKeys = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    lsKeys.push(key);
-  }
-  const modeRelatedLS = lsKeys.filter(k => 
-    k && (k.toLowerCase().includes('mode') || k.toLowerCase().includes('model') || 
-          k.toLowerCase().includes('gemini') || k.toLowerCase().includes('bard') ||
-          k.toLowerCase().includes('preference') || k.toLowerCase().includes('setting'))
-  );
-  if (modeRelatedLS.length > 0) {
-    modeRelatedLS.forEach(key => {
-      try {
-        const val = localStorage.getItem(key);
-        log(`  ${key}: ${val?.slice(0, 200)}`);
-      } catch (e) {}
-    });
-  } else {
-    log('  モード関連のキーが見つかりません');
-    log('  全キー（最初の10件）:');
-    lsKeys.slice(0, 10).forEach(k => log(`    - ${k}`));
-  }
-  
-  // SessionStorage
-  log('--- SessionStorage ---');
-  const ssKeys = [];
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    ssKeys.push(key);
-  }
-  const modeRelatedSS = ssKeys.filter(k => 
-    k && (k.toLowerCase().includes('mode') || k.toLowerCase().includes('model') || 
-          k.toLowerCase().includes('gemini') || k.toLowerCase().includes('bard') ||
-          k.toLowerCase().includes('preference') || k.toLowerCase().includes('setting'))
-  );
-  if (modeRelatedSS.length > 0) {
-    modeRelatedSS.forEach(key => {
-      try {
-        const val = sessionStorage.getItem(key);
-        log(`  ${key}: ${val?.slice(0, 200)}`);
-      } catch (e) {}
-    });
-  } else {
-    log('  モード関連のキーが見つかりません');
-    log('  全キー（最初の10件）:');
-    ssKeys.slice(0, 10).forEach(k => log(`    - ${k}`));
-  }
-  
-  // Cookie
-  log('--- Cookie ---');
-  const cookies = document.cookie.split(';').map(c => c.trim());
-  const modeRelatedCookie = cookies.filter(c => 
-    c.toLowerCase().includes('mode') || c.toLowerCase().includes('model') || 
-    c.toLowerCase().includes('gemini') || c.toLowerCase().includes('bard')
-  );
-  if (modeRelatedCookie.length > 0) {
-    modeRelatedCookie.forEach(c => log(`  ${c.slice(0, 200)}`));
-  } else {
-    log('  モード関連のCookieが見つかりません');
-  }
-  
-  log('=== ストレージ診断 終了 ===');
-  
-  // ネットワークログも表示
-  dumpNetworkLogs();
-}
-
-/**
- * ドロップダウン展開後に呼び出して、検出できた全要素タイプをログ出力。
- * モード切り替えが失敗し続ける場合に自動で実行される。
- */
-function diagnosticDump() {
-  log('=== 診断ダンプ開始 ===');
-
-  // セレクタごとにヒットした要素を確認
-  log('--- セレクタ候補の検出状況 ---');
-  for (const sel of SELECTOR_CANDIDATES.slice(0, 8)) {
-    const els = deepQueryAll(document, sel);
-    if (els.length > 0) {
-      els.forEach((el, idx) => {
-        const label = getButtonLabel(el);
-        const rect = el.getBoundingClientRect();
-        log(`  ${sel} [${idx}]: "${label}" (${Math.round(rect.width)}x${Math.round(rect.height)}px)`);
-      });
-    }
-  }
-
-  // role 付き要素
-  log('--- role属性付き要素 ---');
-  const roles = ['menuitem', 'option', 'listitem', 'treeitem', 'radio', 'tab'];
-  for (const role of roles) {
-    const els = deepQueryAll(document, `[role="${role}"]`);
-    if (els.length > 0) {
-      log(`[role="${role}"] (${els.length}件): ${els.slice(0, 5).map(e => JSON.stringify(getDeepText(e).slice(0, 60))).join(', ')}`);
-    }
-  }
-
-  // mat-option
-  const matOptions = deepQueryAll(document, 'mat-option');
-  if (matOptions.length > 0) {
-    log(`mat-option (${matOptions.length}件): ${matOptions.slice(0, 5).map(e => JSON.stringify(getDeepText(e).slice(0, 60))).join(', ')}`);
-  }
-
-  // モード名を含む要素
-  log('--- モード名を含む要素 ---');
-  const allText = deepGetAllTextElements(document);
-  const modeRelated = allText.filter(el => {
-    const t = getDeepText(el).toLowerCase();
-    return (t.includes('flash') || t.includes('thinking') || t.includes(' pro') || t.includes('思考')) && t.length < 100;
-  });
-  if (modeRelated.length > 0) {
-    log(`モード名含む要素 (${modeRelated.length}件): ${modeRelated.slice(0, 8).map(e => `<${e.tagName.toLowerCase()}> "${getDeepText(e).slice(0, 50)}"`).join(' | ')}`);
-  } else {
-    log('モード名を含む要素が見つかりません。ドロップダウンが開いていない可能性があります。');
-  }
-
-  log('=== 診断ダンプ終了 ===');
-  
-  // ストレージ診断も実行
-  diagnosticStorageDump();
 }
 
 // ─── DOM 検索 ────────────────────────────────────────────────────────────────
@@ -602,27 +402,18 @@ let isSwitching = false;
  */
 async function switchToMode(mode, retries = 6, delayMs = 100) {
   if (isSwitching) return;
-  if (!(mode in MODE_CONFIG)) {
-    log(`未知のモード: "${mode}"`, 'warn');
-    return;
-  }
+  if (!(mode in MODE_CONFIG)) return;
 
   isSwitching = true;
 
   try {
     // 初回のモード確認
     const currentModeInfo = detectCurrentMode();
-    if (currentModeInfo && currentModeInfo.mode === mode) {
-      log(`すでに「${mode}」モードです（"${currentModeInfo.text}" from ${currentModeInfo.source}）。切り替え不要。`);
-      return;
-    }
+    if (currentModeInfo && currentModeInfo.mode === mode) return;
 
     // 戦略A: UI操作なしで直接切り替えを試行
     const directSuccess = await switchModeDirectly(mode);
-    if (directSuccess) {
-      log(`✓ 「${mode}」モードへの切り替え完了`);
-      return;
-    }
+    if (directSuccess) return;
     
     let wait = delayMs;
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -642,25 +433,14 @@ async function switchToMode(mode, retries = 6, delayMs = 100) {
 
         // 反映確認（複数箇所をチェック）
         const updatedModeInfo = detectCurrentMode();
-        if (updatedModeInfo && updatedModeInfo.mode === mode) {
-          log(`✓ 「${mode}」モードへの切り替え完了`);
-          return;
-        }
+        if (updatedModeInfo && updatedModeInfo.mode === mode) return;
       } else {
-        if (attempt === 1) diagnosticDump();
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await sleep(TIMING.MENU_CLOSE);
       }
     }
-    
-    log(
-      `${retries} 回試行しましたがモード切り替えできませんでした。\n` +
-      `Chrome の Console の診断ダンプ（=== 診断ダンプ ===）を確認し、\n` +
-      `content.js の MODE_CONFIG / SELECTOR_CANDIDATES / MENU_ITEM_SELECTORS を更新してください。\n\n` +
-      `【重要】手動でモードを切り替えて、Console の [Network] ログを確認してください。\n` +
-      `その後 GeminiModeFixerDebug.dumpNetworkLogs() を実行してAPIリクエストを確認できます。`,
-      'warn'
-    );
+  } catch (e) {
+    // エラーを無視
   } finally {
     isSwitching = false;
   }
@@ -684,35 +464,28 @@ const navObserver = new MutationObserver(() => {
   const currentUrl = location.href;
   if (currentUrl !== lastUrl) {
     lastUrl = currentUrl;
-    setTimeout(runModeFixer, TIMING.PAGE_INIT);
+    setTimeout(runModeFixer, TIMING.PAGE_INIT * 2);
   }
 });
 
-navObserver.observe(document.body, { childList: true, subtree: true });
+if (document.body) {
+  navObserver.observe(document.body, { childList: true, subtree: true });
+}
 
 // ─── 初回実行 ────────────────────────────────────────────────────────────────
 
-// ネットワーク監視を開始（ページ読み込み直後）
-setupNetworkInterception();
-
 // Gemini は SPA のため document_idle でも UI が未構築の場合がある。
-// 短時間待機してから実行し、load 済みの場合のフォールバックも用意。
-if (document.readyState === 'complete') {
-  setTimeout(runModeFixer, TIMING.PAGE_INIT);
-} else {
-  window.addEventListener('load', () => setTimeout(runModeFixer, TIMING.PAGE_INIT));
+// ページが完全に安定してから実行する。
+function safeRunModeFixer() {
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(() => setTimeout(runModeFixer, TIMING.PAGE_INIT), { timeout: 2000 });
+  } else {
+    setTimeout(runModeFixer, TIMING.PAGE_INIT);
+  }
 }
 
-// デバッグ用: Console で手動で diagnosticStorageDump() を実行できるようにグローバルに公開
-window.GeminiModeFixerDebug = {
-  diagnosticStorageDump,
-  dumpNetworkLogs,
-  setupNetworkInterception,
-  clearNetworkLogs: () => { networkLogs = []; log('ネットワークログをクリアしました'); },
-  switchModeDirectly,
-  detectCurrentMode,
-  // 使用例:
-  // GeminiModeFixerDebug.switchModeDirectly('flash')
-  // GeminiModeFixerDebug.detectCurrentMode()
-  // GeminiModeFixerDebug.dumpNetworkLogs()
-};
+if (document.readyState === 'complete') {
+  safeRunModeFixer();
+} else {
+  window.addEventListener('load', safeRunModeFixer, { once: true });
+}
