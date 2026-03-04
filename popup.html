@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemini Mode Fixer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Google Sans', 'Roboto', sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      width: 300px;
+      padding: 16px;
+      user-select: none;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #313244;
+    }
+
+    .header-icon {
+      width: 32px;
+      height: 32px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #cba6f7;
+    }
+
+    .header p {
+      font-size: 11px;
+      color: #6c7086;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6c7086;
+      margin-bottom: 8px;
+    }
+
+    .mode-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .mode-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 2px solid #313244;
+      background: #181825;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .mode-card:hover {
+      border-color: #585b70;
+      background: #1e1e2e;
+    }
+
+    .mode-card.selected {
+      border-color: #cba6f7;
+      background: #2a2a3e;
+    }
+
+    .mode-card input[type="radio"] {
+      display: none;
+    }
+
+    .mode-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #585b70;
+      flex-shrink: 0;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .mode-card.selected .mode-dot {
+      border-color: #cba6f7;
+      background: #cba6f7;
+    }
+
+    .mode-info {
+      flex: 1;
+    }
+
+    .mode-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cdd6f4;
+    }
+
+    .mode-desc {
+      font-size: 11px;
+      color: #6c7086;
+      margin-top: 2px;
+    }
+
+    .mode-badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 99px;
+      font-weight: 600;
+    }
+
+    .badge-flash {
+      background: #1e3a5f;
+      color: #89b4fa;
+    }
+
+    .badge-thinking {
+      background: #2d1e5f;
+      color: #cba6f7;
+    }
+
+    .badge-pro {
+      background: #1e3a2a;
+      color: #a6e3a1;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #181825;
+      border: 1px solid #313244;
+      margin-bottom: 16px;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      color: #cdd6f4;
+    }
+
+    .toggle-sub {
+      font-size: 11px;
+      color: #6c7086;
+      margin-top: 2px;
+    }
+
+    /* iOS-style toggle */
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      display: none;
+    }
+
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 11px;
+      background: #313244;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    .toggle input:checked + .toggle-track {
+      background: #cba6f7;
+    }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.2s;
+      pointer-events: none;
+    }
+
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(18px);
+    }
+
+    .slider-row {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #181825;
+      border: 1px solid #313244;
+      margin-bottom: 16px;
+    }
+
+    .slider-label {
+      font-size: 13px;
+      color: #cdd6f4;
+      margin-bottom: 8px;
+    }
+
+    .slider-sub {
+      font-size: 11px;
+      color: #6c7086;
+      margin-bottom: 10px;
+    }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .slider {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: #313244;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #cba6f7;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .slider::-webkit-slider-thumb:hover {
+      background: #dcc6f7;
+    }
+
+    .slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #cba6f7;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+
+    .slider::-moz-range-thumb:hover {
+      background: #dcc6f7;
+    }
+
+    .slider-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cba6f7;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #6c7086;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #181825;
+      border: 1px solid #313244;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #a6e3a1;
+      flex-shrink: 0;
+    }
+
+    .status-dot.inactive {
+      background: #585b70;
+    }
+
+    #status-text {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg class="header-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#2a2a3e"/>
+      <path d="M16 6 L16 26 M6 16 L26 16" stroke="#cba6f7" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="16" cy="16" r="4" fill="#cba6f7"/>
+      <circle cx="16" cy="8" r="2" fill="#89b4fa"/>
+      <circle cx="16" cy="24" r="2" fill="#89b4fa"/>
+      <circle cx="8" cy="16" r="2" fill="#89b4fa"/>
+      <circle cx="24" cy="16" r="2" fill="#89b4fa"/>
+    </svg>
+    <div>
+      <h1>Gemini Mode Fixer</h1>
+      <p>起動時のモードを自動設定します</p>
+    </div>
+  </div>
+
+  <div class="section-title">デフォルトモード</div>
+
+  <div class="mode-list">
+    <label class="mode-card" id="card-flash">
+      <input type="radio" name="mode" value="flash" />
+      <div class="mode-dot"></div>
+      <div class="mode-info">
+        <div class="mode-name">高速モード</div>
+        <div class="mode-desc">Flash — 素早い回答</div>
+      </div>
+      <span class="mode-badge badge-flash">Flash</span>
+    </label>
+
+    <label class="mode-card" id="card-thinking">
+      <input type="radio" name="mode" value="thinking" />
+      <div class="mode-dot"></div>
+      <div class="mode-info">
+        <div class="mode-name">思考モード</div>
+        <div class="mode-desc">Thinking — 深い推論</div>
+      </div>
+      <span class="mode-badge badge-thinking">Thinking</span>
+    </label>
+
+    <label class="mode-card" id="card-pro">
+      <input type="radio" name="mode" value="pro" />
+      <div class="mode-dot"></div>
+      <div class="mode-info">
+        <div class="mode-name">Pro</div>
+        <div class="mode-desc">Pro — 高品質な回答</div>
+      </div>
+      <span class="mode-badge badge-pro">Pro</span>
+    </label>
+  </div>
+
+  <div class="toggle-row">
+    <div>
+      <div class="toggle-label">自動切り替えを有効にする</div>
+      <div class="toggle-sub">Gemini を開くたびに自動でモードを設定</div>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="enabled-toggle" />
+      <div class="toggle-track"></div>
+      <div class="toggle-thumb"></div>
+    </label>
+  </div>
+
+  <div class="slider-row">
+    <div class="slider-label">待機時間</div>
+    <div class="slider-sub">切り替え開始までの待ち時間（短いと失敗する可能性があります）</div>
+    <div class="slider-container">
+      <input type="range" id="delay-slider" class="slider" min="0" max="3000" step="50" value="100" />
+      <span class="slider-value" id="delay-value">100ms</span>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">読み込み中...</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
