@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Gemini Mode Fixer",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Google Geminiを開いたとき、指定したモード（高速・思考・Pro）で自動起動します。",
     "permissions": [
         "storage"

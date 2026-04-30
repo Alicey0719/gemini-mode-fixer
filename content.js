@@ -59,6 +59,9 @@ const MODE_CONFIG = {
   },
 };
 
+// 回数制限時のフォールバック順（高性能順）
+const MODE_PRIORITY = ['pro', 'thinking', 'flash'];
+
 /**
  * モデルセレクタボタンを探すための CSS セレクタ候補。
  * Gemini の DOM が変わった場合はここに新しいセレクタを追加。
@@ -275,6 +278,31 @@ function findModelSelectorButton() {
 }
 
 /**
+ * メニュー項目が回数制限・無効化されているか判定。
+ */
+function isMenuItemUnavailable(item) {
+  if (!item) return true;
+  if (item.getAttribute('aria-disabled') === 'true') return true;
+  if (item.hasAttribute('disabled')) return true;
+  const cls = (item.className || '').toLowerCase();
+  if (['disabled', 'unavailable', 'inactive'].some(c => cls.includes(c))) return true;
+  const text = getDeepText(item).toLowerCase();
+  return ['回数制限', 'rate limit', 'unavailable', '利用不可', '上限', 'exceeded'].some(kw => text.includes(kw));
+}
+
+/**
+ * 現在開いているドロップダウンから、excludeMode を除く中で最も高性能な利用可能モードを返す。
+ */
+function findBestAvailableMode(excludeMode) {
+  for (const m of MODE_PRIORITY) {
+    if (m === excludeMode) continue;
+    const item = findMenuItemForMode(m);
+    if (item && !isMenuItemUnavailable(item)) return m;
+  }
+  return null;
+}
+
+/**
  * 開いているドロップダウンから指定モードに対応するメニュー項目を探す。
  * Shadow DOM を含む深部探索を実施。
  */
@@ -428,6 +456,22 @@ async function switchToMode(mode, retries = 6, delayMs = 100) {
 
       const menuItem = findMenuItemForMode(mode);
       if (menuItem) {
+        if (isMenuItemUnavailable(menuItem)) {
+          // 回数制限: 最善の利用可能モードへフォールバック（リトライしない）
+          const fallbackMode = findBestAvailableMode(mode);
+          if (fallbackMode) {
+            const fallbackItem = findMenuItemForMode(fallbackMode);
+            if (fallbackItem && !isMenuItemUnavailable(fallbackItem)) {
+              fallbackItem.click();
+              await sleep(TIMING.CLICK_REFLECT);
+              return;
+            }
+          }
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          await sleep(TIMING.MENU_CLOSE);
+          return;
+        }
+
         menuItem.click();
         await sleep(TIMING.CLICK_REFLECT);
 
@@ -446,10 +490,17 @@ async function switchToMode(mode, retries = 6, delayMs = 100) {
   }
 }
 
+/** チャット画面（/app*）かどうかを判定 */
+function isOnAppPage() {
+  return location.pathname.startsWith('/app');
+}
+
 /**
  * ストレージから設定を読み込んでモード切り替えを実行。
+ * /app* ページ以外では動作しない（検索・履歴画面などへの誤作動を防止）。
  */
 function runModeFixer() {
+  if (!isOnAppPage()) return;
   chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
     if (!settings.enabled) return;
     switchToMode(settings.mode, 6, settings.delayMs);
