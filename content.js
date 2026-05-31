@@ -490,9 +490,10 @@ async function switchToMode(mode, retries = 6, delayMs = 100) {
   }
 }
 
-/** チャット画面（/app*）かどうかを判定 */
+/** チャット画面（/app または /app/...）かどうかを判定 */
 function isOnAppPage() {
-  return location.pathname.startsWith('/app');
+  const path = location.pathname;
+  return path === '/app' || path.startsWith('/app/');
 }
 
 /**
